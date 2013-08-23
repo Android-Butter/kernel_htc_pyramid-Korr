@@ -34,22 +34,22 @@
 
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MSM_FB_PRIM_BUF_SIZE \
-		(roundup((960 * 540 * 4), 4096) * 3) /* 4 bpp x 3 pages */
+		0x5F1000 /* 4 bpp x 3 pages */ /*(roundup((960 * 540 * 4), 4096) * 3)*/
 #else
 #define MSM_FB_PRIM_BUF_SIZE \
-		(roundup((960 * 540 * 4), 4096) * 2) /* 4 bpp x 2 pages */
+		0x3F6000 /* 4 bpp x 2 pages */ /*(roundup((960 * 540 * 4), 4096) * 2)*/
 #endif
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 #define MSM_FB_EXT_BUF_SIZE  \
-		(roundup((1920 * 1080 * 2), 4096) * 1) /* 2 bpp x 1 page */
+		0x3F5000 /* 2 bpp x 1 page */ /*(roundup((1920 * 1080 * 2), 4096) * 1)*/
 #else
 #define MSM_FB_EXT_BUF_SIZE	0
 #endif
 
 #ifdef CONFIG_FB_MSM_OVERLAY_WRITEBACK
 /* width x height x 3 bpp x 2 frame buffer */
-#define MSM_FB_WRITEBACK_SIZE roundup((960 * 540 * 3 * 2), 4096)
+#define MSM_FB_WRITEBACK_SIZE 0x2F8000 /*roundup((960 * 540 * 3 * 2), 4096)*/
 #define MSM_FB_WRITEBACK_OFFSET 0
 #else
 #define MSM_FB_WRITEBACK_SIZE   0
@@ -57,24 +57,25 @@
 #endif
 
 /* Note: must be multiple of 4096 */
-#define MSM_FB_SIZE roundup(MSM_FB_PRIM_BUF_SIZE + MSM_FB_EXT_BUF_SIZE, 4096)
+#define MSM_FB_SIZE 0x6F0000 /*roundup(MSM_FB_PRIM_BUF_SIZE + MSM_FB_EXT_BUF_SIZE, 4096)*/
 
-#define MSM_PMEM_MDP_SIZE	0x3A00000
+#define MSM_PMEM_MDP_SIZE	0x23A0000
+#ifdef CONFIG_PYRAMID_624MB_RAM
+#define MSM_PMEM_ADSP_SIZE	0x1500000
+#else
 #define MSM_PMEM_ADSP_SIZE	0x1CB0000
-#define MSM_PMEM_ADSP2_SIZE	0x654000 /* 1152 * 1920 * 1.5 * 2 */
+#endif /*CONFIG_PYRAMID_624MB_RAM*/
 #define MSM_PMEM_AUDIO_SIZE	0x239000
-#define MSM_PMEM_KERNEL_EBI1_SIZE	0xC7000
 
+#define MSM_FB_BASE		(MSM_PMEM_MDP_BASE + MSM_PMEM_MDP_SIZE)
+#define MSM_PMEM_MDP_BASE	(0x40400000)
 #define MSM_FB_WRITEBACK_BASE	(0x45C00000)
 #define MSM_PMEM_AUDIO_BASE	(0x46400000)
-#define MSM_PMEM_ADSP_BASE	(0x6D600000)
-#define MSM_PMEM_ADSP2_BASE	(MSM_PMEM_ADSP_BASE + MSM_PMEM_ADSP_SIZE)
-#define MSM_FB_BASE		(0x70300000 - MSM_FB_SIZE)
-#define MSM_PMEM_MDP_BASE	(0x40400000)
-#define MSM_PMEM_KERNEL_EBI1_BASE	(MSM_PMEM_AUDIO_BASE + MSM_PMEM_AUDIO_SIZE)
-
-#define MSM_SMI_BASE          0x38000000
-#define MSM_SMI_SIZE          0x4000000
+#ifdef CONFIG_PYRAMID_624MB_RAM
+#define MSM_PMEM_ADSP_BASE	(USER_SMI_BASE + USER_SMI_SIZE)
+#else
+#define MSM_PMEM_ADSP_BASE	(0x70000000 - MSM_PMEM_ADSP_SIZE)
+#endif /*CONFIG_PYRAMID_624MB_RAM*/
 
 /* Kernel SMI PMEM Region for video core, used for Firmware */
 /* and encoder,decoder scratch buffers */
@@ -84,15 +85,31 @@
 #define KERNEL_SMI_BASE       (MSM_SMI_BASE)
 #define KERNEL_SMI_SIZE       0x400000
 
+#define MSM_SMI_BASE          (0x38000000)
+#ifdef CONFIG_PYRAMID_624MB_RAM
+#define MSM_SMI_SIZE          (0x2C80000)
+
+/* User space SMI PMEM Region for video core*/
+/* used for encoder, decoder input & output buffers  */
+#define USER_SMI_BASE         (KERNEL_SMI_BASE + KERNEL_SMI_SIZE)
+#define USER_SMI_SIZE         (0x2700000)
+#else
+#define MSM_SMI_SIZE          (0x4000000)
+
 /* User space SMI PMEM Region for video core*/
 /* used for encoder, decoder input & output buffers  */
 #define USER_SMI_BASE         (KERNEL_SMI_BASE + KERNEL_SMI_SIZE)
 #define USER_SMI_SIZE         (MSM_SMI_SIZE - KERNEL_SMI_SIZE)
+#endif /*CONFIG_PYRAMID_624MB_RAM*/
 #define MSM_PMEM_SMIPOOL_BASE USER_SMI_BASE
 #define MSM_PMEM_SMIPOOL_SIZE USER_SMI_SIZE
 
 #define PHY_BASE_ADDR1  0x48000000
-#define SIZE_ADDR1      0x25600000
+#ifdef CONFIG_PYRAMID_624MB_RAM
+#define SIZE_ADDR1      0x28000000
+#else
+#define SIZE_ADDR1      (MSM_PMEM_ADSP_BASE - PHY_BASE_ADDR1)
+#endif /*CONFIG_PYRAMID_624MB_RAM*/
 
 /* GPIO definition */
 

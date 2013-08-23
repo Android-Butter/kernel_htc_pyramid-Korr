@@ -602,6 +602,23 @@ int PageHuge(struct page *page)
 
 EXPORT_SYMBOL_GPL(PageHuge);
 
+pgoff_t __basepage_index(struct page *page)
+{
+	struct page *page_head = compound_head(page);
+	pgoff_t index = page_index(page_head);
+	unsigned long compound_idx;
+
+	if (!PageHuge(page_head))
+		return page_index(page);
+
+	if (compound_order(page_head) >= MAX_ORDER)
+		compound_idx = page_to_pfn(page) - page_to_pfn(page_head);
+	else
+		compound_idx = page - page_head;
+
+	return (index << compound_order(page_head)) + compound_idx;
+}
+
 static struct page *alloc_fresh_huge_page_node(struct hstate *h, int nid)
 {
 	struct page *page;
@@ -865,7 +882,6 @@ static int gather_surplus_pages(struct hstate *h, int delta)
 		h->resv_huge_pages += delta;
 		return 0;
 	}
-	spin_unlock(&hugetlb_lock);
 
 	allocated = 0;
 	INIT_LIST_HEAD(&surplus_list);
@@ -2306,6 +2322,22 @@ void unmap_hugepage_range(struct vm_area_struct *vma, unsigned long start,
 {
 	mutex_lock(&vma->vm_file->f_mapping->i_mmap_mutex);
 	__unmap_hugepage_range(vma, start, end, ref_page);
+	/*
+	 * Clear this flag so that x86's huge_pmd_share page_table_shareable
+	 * test will fail on a vma being torn down, and not grab a page table
+	 * on its way out.  We're lucky that the flag has such an appropriate
+	 * name, and can in fact be safely cleared here. We could clear it
+	 * before the __unmap_hugepage_range above, but all that's necessary
+	 * is to clear it before releasing the i_mmap_mutex below.
+	 *
+	 * This works because in the contexts this is called, the VMA is
+	 * going to be destroyed. It is not vunerable to madvise(DONTNEED)
+	 * because madvise is not supported on hugetlbfs. The same applies
+	 * for direct IO. unmap_hugepage_range() is only being called just
+	 * before free_pgtables() so clearing VM_MAYSHARE will not cause
+	 * surprises later.
+	 */
+	vma->vm_flags &= ~VM_MAYSHARE;
 	mutex_unlock(&vma->vm_file->f_mapping->i_mmap_mutex);
 }
 
@@ -2868,9 +2900,14 @@ void hugetlb_change_protection(struct vm_area_struct *vma,
 		}
 	}
 	spin_unlock(&mm->page_table_lock);
-	mutex_unlock(&vma->vm_file->f_mapping->i_mmap_mutex);
-
+	/*
+	 * Must flush TLB before releasing i_mmap_mutex: x86's huge_pmd_unshare
+	 * may have cleared our pud entry and done put_page on the page table:
+	 * once we release i_mmap_mutex, another task can do the final put_page
+	 * and that page table be reused and filled with junk.
+	 */
 	flush_tlb_range(vma, start, end);
+	mutex_unlock(&vma->vm_file->f_mapping->i_mmap_mutex);
 }
 
 int hugetlb_reserve_pages(struct inode *inode,
